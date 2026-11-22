@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<!--
+  ATENA — App de Desempenho Pessoal
+  index.html = o "esqueleto" do app. Aqui ficam as telas e os botões.
+  O visual fica no style.css e o comportamento no app.js.
+-->
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <!-- viewport-fit=cover deixa o app usar a tela inteira em celulares com "notch" -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Atena</title>
+  <meta name="description" content="Seu app de desempenho pessoal" />
+
+  <!-- Cor da barra do navegador no celular -->
+  <meta name="theme-color" content="#070b1a" />
+
+  <!-- PWA: o manifest diz ao celular como instalar o app -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ===================== MEGA BRAIN (abertura) ===================== -->
+  <!-- Cérebro de partículas desenhado no <canvas> pelo app.js -->
+  <div class="splash" id="splash" role="button" aria-label="Entrar no app">
+    <canvas id="splashBrain" class="brain-canvas"></canvas>
+    <div class="splash-text">
+      <p class="splash-name" id="splashName">ATENA</p>
+      <p class="splash-greet" id="splashGreet"></p>
+      <p class="splash-hint">Toque para entrar</p>
+    </div>
+  </div>
+  <script>
+    // Se a abertura estiver desligada nas Configurações, esconde antes de desenhar a tela
+    try {
+      var cfg = JSON.parse(localStorage.getItem('atena-data') || '{}').settings;
+      if (cfg && cfg.splash === false) document.getElementById('splash').hidden = true;
+    } catch (e) {}
+  </script>
+
+  <!-- ===================== BLOQUEIO (PIN / digital) ===================== -->
+  <div class="lock-screen" id="lockScreen" hidden>
+    <div class="lock-box">
+      <div class="lock-icon">
+        <svg viewBox="0 0 24 24" width="30" height="30"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <p class="lock-title" id="lockTitle">Digite seu PIN</p>
+      <p class="lock-msg" id="lockMsg"></p>
+      <div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i></div>
+      <div class="keypad" id="keypad">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="bio" id="bioKey" aria-label="Usar digital ou rosto">
+          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 11v4M8.5 8.5a5 5 0 0 1 8.5 3.5v2M7 12c0 3 .5 5 2 7M17 16c0 1.5-.3 3-1 4M12 3a9 9 0 0 1 9 9M3 12a9 9 0 0 1 4-7.5"/></svg>
+        </button>
+        <button data-k="0">0</button>
+        <button data-k="del" aria-label="Apagar">
+          <svg viewBox="0 0 24 24" width="24" height="24"><path d="M21 5H9l-6 7 6 7h12zM12 9l6 6M18 9l-6 6"/></svg>
+        </button>
+      </div>
+      <div class="lock-links">
+        <button class="link-btn" id="lockCancel" hidden>Cancelar</button>
+        <button class="link-btn" id="lockForgot">Esqueci o PIN</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Se o bloqueio estiver ligado, mostra a tela de PIN antes de qualquer conteúdo
+    try {
+      var lk = JSON.parse(localStorage.getItem('atena-lock') || '{}');
+      if (lk.enabled) document.getElementById('lockScreen').hidden = false;
+    } catch (e) {}
+  </script>
+
+  <!-- Fundo colorido animado (3 "bolhas" de luz que se movem devagar) -->
+  <div class="bg" aria-hidden="true">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+  </div>
+
+  <!-- Barra do topo: nome do assistente + botão de tema -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span id="assistantName">Atena</span>
+    </div>
+    <div class="top-actions">
+      <!-- Botão de voz: abre o painel de comandos -->
+      <button id="voiceBtn" class="icon-btn glass" aria-label="Falar com a assistente">
+        <svg viewBox="0 0 24 24" width="20" height="20"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button id="themeToggle" class="icon-btn glass" aria-label="Alternar modo claro/escuro">
+        <!-- O ícone é trocado pelo app.js (lua ou sol) -->
+        <svg id="themeIcon" viewBox="0 0 24 24" width="20" height="20"></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Painel de voz (aparece por cima do app) -->
+  <div class="voice-panel" id="voicePanel" hidden>
+    <div class="voice-box glass">
+      <button class="mini-btn voice-close" id="voiceClose" aria-label="Fechar">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <!-- Mega Brain: cérebro de partículas que pulsa ao ouvir/falar -->
+      <div class="orb brain-orb" id="voiceOrb"><canvas id="voiceBrain" class="brain-canvas"></canvas></div>
+      <p class="voice-status" id="voiceStatus">Toque no microfone e fale</p>
+      <p class="voice-heard" id="voiceHeard"></p>
+      <p class="voice-reply" id="voiceReply"></p>
+      <button class="round-btn main mic" id="micBtn" aria-label="Ouvir comando">
+        <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <form class="add-row voice-type" id="voiceForm" autocomplete="off">
+        <input id="voiceInput" placeholder="…ou digite um comando" aria-label="Comando" />
+        <button class="add-btn" aria-label="Enviar">›</button>
+      </form>
+      <details class="voice-help">
+        <summary>O que posso dizer?</summary>
+        <ul>
+          <li><b>"Anotar</b> comprar caderno"</li>
+          <li><b>"Nova tarefa</b> estudar cálculo"</li>
+          <li><b>"Cumpri</b> beber água" (marca o hábito)</li>
+          <li><b>"Gastei</b> 25 reais com almoço"</li>
+          <li><b>"Iniciar foco"</b> / <b>"Pausar foco"</b></li>
+          <li><b>"Resumo do dia"</b> / <b>"Frase do dia"</b></li>
+          <li><b>"Como foi meu dia"</b> (fechamento do dia)</li>
+          <li><b>"Meta</b> terminar o trabalho de física"</li>
+          <li><b>"Abrir</b> finanças" (ou tarefas, hábitos, leitura…)</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+
+  <!-- Área onde as telas aparecem. Cada <section class="screen"> é uma tela. -->
+  <main id="app">
+
+    <!-- ===================== TELA INICIAL ===================== -->
+    <section class="screen active" data-screen="home">
+      <!-- Saudação: o texto é preenchido pelo app.js de acordo com o horário -->
+      <div class="hero">
+        <p class="hero-eyebrow" id="todayDate">—</p>
+        <h1 class="hero-title" id="greeting">Olá!</h1>
+        <p class="hero-sub">O que temos para hoje</p>
+        <button class="listen-btn" id="speakSummary">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9v6h4l5 4V5L8 9zM16 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+          Ouvir resumo
+        </button>
+      </div>
+
+      <!-- Resumo do dia em 3 números -->
+      <div class="stats">
+        <div class="card glass stat" style="--i:0">
+          <span class="stat-num" id="statTasks">0/0</span>
+          <span class="stat-label">Tarefas</span>
+        </div>
+        <div class="card glass stat" style="--i:1">
+          <span class="stat-num" id="statHabits">0/0</span>
+          <span class="stat-label">Hábitos</span>
+        </div>
+        <div class="card glass stat" style="--i:2">
+          <span class="stat-num" id="statXp">0</span>
+          <span class="stat-label">XP hoje</span>
+        </div>
+      </div>
+
+      <!-- Nível, XP e sequência (gamificação) -->
+      <article class="card glass level-card tappable" style="--i:3" data-go="achievements">
+        <div class="level-badge" id="levelBadge">1</div>
+        <div class="level-info">
+          <div class="level-top">
+            <strong id="levelTitle">Nível 1</strong>
+            <span class="fire" id="dayStreak">🔥 0</span>
+          </div>
+          <div class="progress"><span class="progress-bar" id="levelBar"></span></div>
+          <span class="note-date" id="levelText">0 / 100 XP</span>
+        </div>
+      </article>
+
+      <!-- Humor do dia: um toque para registrar -->
+      <article class="card glass mood-card" style="--i:3">
+        <div class="card-head-row">
+          <p class="card-eyebrow">Como o senhor está hoje?</p>
+          <button class="link-btn" data-go="stats">Ver diário</button>
+        </div>
+        <div class="mood-picker" id="homeMood"></div>
+      </article>
+
+      <!-- Matéria do dia (seção Estudos) -->
+      <article class="card glass study-card tappable" style="--i:3" data-go="studies">
+        <div class="card-head-row">
+          <p class="card-eyebrow">Matéria do dia</p>
+          <button class="link-btn" id="homeQuizBtn" data-go="studies">Fazer quiz</button>
+        </div>
+        <p class="study-subject" id="homeSubject">—</p>
+        <p class="muted small" id="homeExam"></p>
+      </article>
+
+      <!-- Hábitos de hoje (checklist rápido) -->
+      <article class="card glass" style="--i:3">
+        <div class="card-head-row">
+          <p class="card-eyebrow">Hábitos de hoje</p>
+          <button class="link-btn" data-go="habits">Ver todos</button>
+        </div>
+        <ul class="task-list" id="homeHabits"></ul>
+      </article>
+
+      <!-- Metas da semana -->
+      <article class="card glass week-card" style="--i:3">
+        <div class="card-head-row">
+          <p class="card-eyebrow">Metas da semana</p>
+          <span class="tag" id="weekCount">0/0</span>
+        </div>
+        <p class="muted small" id="weekHint"></p>
+        <ul class="task-list" id="weekGoals"></ul>
+        <form class="week-add" id="weekForm" autocomplete="off">
+          <input id="weekInput" class="line-input" maxlength="80" placeholder="Nova meta da semana..." aria-label="Nova meta da semana" />
+          <button class="add-btn" aria-label="Adicionar meta">+</button>
+        </form>
+      </article>
+
+      <!-- Frase do dia (seção "Filosofia do cérebro") -->
+      <!-- Tocar no cartão abre a seção Filosofia -->
+      <article class="card glass quote tappable" style="--i:3" data-go="philosophy">
+        <p class="card-eyebrow">Filosofia do cérebro · frase do dia</p>
+        <blockquote id="dailyQuote">—</blockquote>
+        <p class="quote-author" id="dailyQuoteAuthor"></p>
+      </article>
+
+      <!-- Resumo do dia (à noite vira o "Fechamento do dia") -->
+      <article class="card glass day-card" style="--i:4">
+        <div class="card-head-row">
+          <p class="card-eyebrow" id="dayCardTitle">Resumo do dia</p>
+          <button class="link-btn" id="dayEndToggle">Ver fechamento</button>
+        </div>
+        <p id="daySummary" class="muted">—</p>
+        <div class="progress" aria-label="Progresso do dia">
+          <span class="progress-bar" id="dayProgress"></span>
+        </div>
+        <div class="day-end" id="dayEnd" hidden>
+          <div class="day-end-grid" id="dayEndGrid"></div>
+          <div id="dayEndLists"></div>
+          <button class="primary-btn wide-btn" id="dayEndSpeak">🔊 Ouvir fechamento</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- ===================== TELAS FUTURAS ===================== -->
+    <!-- Estas telas são "placeholders". Vamos preenchê-las nas próximas etapas. -->
+    <!-- ===================== PROJETOS E TAREFAS ===================== -->
+    <section class="screen" data-screen="tasks">
+      <h2 class="screen-title">Projetos e tarefas</h2>
+
+      <!-- Seletor de dia da semana (os botões são criados pelo app.js) -->
+      <div class="weekdays glass" id="weekdays" role="tablist" aria-label="Dia da semana"></div>
+      <p class="day-label" id="dayLabel">—</p>
+
+      <!-- Formulário para criar um projeto no dia escolhido -->
+      <form class="add-row card glass" id="projectForm" autocomplete="off">
+        <input id="projectInput" maxlength="60" placeholder="Novo projeto para este dia..." aria-label="Nome do projeto" />
+        <button class="add-btn" aria-label="Adicionar projeto">+</button>
+      </form>
+
+      <!-- Lista de projetos do dia (montada pelo app.js) -->
+      <div id="projectList"></div>
+    </section>
+
+    <!-- ===================== FOCO: RELÓGIO + POMODORO ===================== -->
+    <section class="screen" data-screen="focus">
+      <!-- Relógio grande -->
+      <div class="clock">
+        <div class="clock-time" id="clockTime">00:00</div>
+        <div class="clock-sec" id="clockSec">00</div>
+        <p class="clock-date" id="clockDate">—</p>
+      </div>
+
+      <!-- Timer Pomodoro -->
+      <article class="card glass pomo" id="pomoCard">
+        <div class="segmented" id="pomoMode">
+          <button class="seg active" data-mode="focus">Foco</button>
+          <button class="seg" data-mode="break">Pausa</button>
+        </div>
+
+        <div class="pomo-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="gPomo" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#3da9ff"/><stop offset="1" stop-color="#22d3ee"/>
+              </linearGradient>
+              <linearGradient id="gPomoBreak" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#22d3ee"/>
+              </linearGradient>
+            </defs>
+            <circle cx="60" cy="60" r="52" class="ring-bg"/>
+            <circle cx="60" cy="60" r="52" class="pomo-fg" id="pomoFg" pathLength="100"/>
+          </svg>
+          <div class="pomo-center">
+            <strong id="pomoTime">25:00</strong>
+            <span id="pomoLabel">Pronto para focar</span>
+          </div>
+        </div>
+
+        <div class="pomo-controls">
+          <button class="round-btn ghost" id="pomoReset" aria-label="Reiniciar">
+            <svg viewBox="0 0 24 24"><path d="M4 4v6h6M4.5 15a8 8 0 1 0 1.9-8.3L4 10"/></svg>
+          </button>
+          <button class="round-btn main" id="pomoStart" aria-label="Iniciar">
+            <svg viewBox="0 0 24 24" id="pomoStartIcon"><path d="M7 4l13 8-13 8z"/></svg>
+          </button>
+          <button class="round-btn ghost" id="pomoSkip" aria-label="Pular">
+            <svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8zM19 5v14"/></svg>
+          </button>
+        </div>
+      </article>
+
+      <!-- Tempo de estudo registrado -->
+      <article class="card glass">
+        <p class="card-eyebrow">Tempo de estudo</p>
+        <div class="mini-stats">
+          <div><strong id="focusToday">0 min</strong><span>hoje</span></div>
+          <div><strong id="focusSessions">0</strong><span>pomodoros hoje</span></div>
+          <div><strong id="focusWeek">0 h</strong><span>últimos 7 dias</span></div>
+        </div>
+        <div class="week-bars" id="focusBars"></div>
+      </article>
+    </section>
+
+    <!-- ===================== DESEMPENHO ===================== -->
+    <section class="screen" data-screen="stats">
+      <h2 class="screen-title">Desempenho</h2>
+
+      <!-- Gráfico de evolução -->
+      <article class="card glass chart-card">
+        <div class="chart-head">
+          <p class="card-eyebrow">Evolução</p>
+          <div class="segmented tiny" id="perfRange">
+            <button class="seg active" data-days="7">7 dias</button>
+            <button class="seg" data-days="30">30 dias</button>
+          </div>
+        </div>
+        <!-- O desenho do gráfico (SVG) é criado pelo app.js -->
+        <div id="perfChart" class="chart"></div>
+        <div class="legend">
+          <span><i class="dot score"></i>Nota (×10)</span>
+          <span><i class="dot focus"></i>Foco %</span>
+          <span><i class="dot mood"></i>Humor</span>
+        </div>
+        <p class="mood-insight muted small" id="moodInsight" hidden></p>
+        <div class="mini-stats perf-avg">
+          <div><strong id="avgScore">–</strong><span>nota média</span></div>
+          <div><strong id="avgFocus">–</strong><span>foco médio</span></div>
+          <div><strong id="daysLogged">0</strong><span>dias registrados</span></div>
+        </div>
+      </article>
+
+      <!-- Diário de humor -->
+      <article class="card glass" id="moodCard">
+        <div class="perf-form-head">
+          <p class="card-eyebrow">Diário de humor</p>
+          <input type="date" id="moodDate" class="date-input" aria-label="Data do humor" />
+        </div>
+        <div class="mood-picker big" id="moodPicker"></div>
+        <p class="mood-label" id="moodLabel">Toque no rosto que combina com o seu dia</p>
+        <textarea id="moodNote" class="boxed" rows="2" maxlength="300" placeholder="O que influenciou seu humor? (opcional)" aria-label="Nota do humor"></textarea>
+        <div class="note-actions">
+          <button type="button" class="primary-btn" id="moodSave">Salvar humor</button>
+        </div>
+      </article>
+
+      <!-- Registro do dia -->
+      <form class="card glass perf-form" id="perfForm" autocomplete="off">
+        <div class="perf-form-head">
+          <p class="card-eyebrow">Como foi o dia?</p>
+          <input type="date" id="perfDate" class="date-input" aria-label="Data" />
+        </div>
+
+        <label class="range-row">
+          <span>Nota do dia</span>
+          <output id="perfScoreOut">7</output>
+        </label>
+        <input type="range" id="perfScore" min="0" max="10" step="1" value="7" />
+
+        <label class="range-row">
+          <span>Foco</span>
+          <output id="perfFocusOut">70%</output>
+        </label>
+        <input type="range" id="perfFocus" min="0" max="100" step="5" value="70" />
+
+        <textarea id="perfWins" class="boxed" rows="2" maxlength="600" placeholder="Vitórias de hoje..." aria-label="Vitórias"></textarea>
+        <textarea id="perfErrors" class="boxed" rows="2" maxlength="600" placeholder="Erros e o que aprendi com eles..." aria-label="Erros"></textarea>
+
+        <div class="note-actions">
+          <button type="submit" class="primary-btn" id="perfSave">Salvar dia</button>
+        </div>
+      </form>
+
+      <!-- Histórico -->
+      <p class="section-label">Histórico</p>
+      <div id="perfList"></div>
+    </section>
+
+    <!-- ===================== MENU "MAIS" ===================== -->
+    <!-- Cada botão com data-go abre uma tela. Para adicionar uma função nova,
+         copie um botão, mude data-go e crie a <section> correspondente. -->
+    <section class="screen" data-screen="more">
+      <h2 class="screen-title">Mais</h2>
+      <div class="menu-grid">
+        <button class="card glass menu-item" data-go="studies" style="--i:0">
+          <svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg>
+          <span>Estudos</span>
+        </button>
+        <button class="card glass menu-item" data-go="report" style="--i:0">
+          <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <span>Relatório</span>
+        </button>
+        <button class="card glass menu-item" data-go="dev" style="--i:0">
+          <svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+          <span>Projetos dev</span>
+        </button>
+        <button class="card glass menu-item" data-go="workout" style="--i:0">
+          <svg viewBox="0 0 24 24"><path d="M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12"/></svg>
+          <span>Treinos</span>
+        </button>
+        <button class="card glass menu-item" data-go="habits" style="--i:0">
+          <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M4 6h2M4 12h2M4 18h2M10 18h10"/></svg>
+          <span>Hábitos</span>
+        </button>
+        <button class="card glass menu-item" data-go="achievements" style="--i:0">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/></svg>
+          <span>Conquistas</span>
+        </button>
+        <button class="card glass menu-item" data-go="notes" style="--i:0">
+          <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/></svg>
+          <span>Anotações</span>
+        </button>
+        <button class="card glass menu-item" data-go="philosophy" style="--i:1">
+          <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.5 1.5 3.5 2 5h8c.5-1.5 2-2.5 2-5a6 6 0 0 0-6-6zM9 18h6M10 21h4"/></svg>
+          <span>Filosofia</span>
+        </button>
+        <button class="card glass menu-item" data-go="mindset" style="--i:2">
+          <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+          <span>Mindset</span>
+        </button>
+        <button class="card glass menu-item" data-go="reading" style="--i:3">
+          <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21V5"/></svg>
+          <span>Leitura</span>
+        </button>
+        <button class="card glass menu-item" data-go="finance" style="--i:4">
+          <svg viewBox="0 0 24 24"><path d="M3 7h18v12H3zM3 11h18M7 15h3"/></svg>
+          <span>Finanças</span>
+        </button>
+        <button class="card glass menu-item" data-go="reminders" style="--i:5">
+          <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+          <span>Lembretes</span>
+        </button>
+        <button class="card glass menu-item" data-go="settings" style="--i:6">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>
+          <span>Configurações</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================== FILOSOFIA DO CÉREBRO ===================== -->
+    <section class="screen" data-screen="philosophy" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Filosofia do cérebro</h2>
+      </div>
+
+      <!-- Destaque: a frase escolhida para hoje -->
+      <article class="card glass quote today-quote">
+        <p class="card-eyebrow">Frase de hoje</p>
+        <blockquote id="philoToday">—</blockquote>
+        <p class="quote-author" id="philoTodayAuthor"></p>
+        <button class="ghost-btn small-btn" id="philoShuffle">Sortear outra</button>
+      </article>
+
+      <!-- Formulário: cadastrar ou editar -->
+      <form class="card glass note-form" id="philoForm" autocomplete="off">
+        <!-- Escolha do tipo: frase ou princípio -->
+        <div class="segmented" role="radiogroup" aria-label="Tipo">
+          <label><input type="radio" name="philoType" value="frase" checked /><span>Frase</span></label>
+          <label><input type="radio" name="philoType" value="principio" /><span>Princípio</span></label>
+        </div>
+        <textarea id="philoText" rows="3" maxlength="500" placeholder="Escreva a frase ou princípio..." aria-label="Texto"></textarea>
+        <input id="philoAuthor" class="line-input" maxlength="60" placeholder="Autor (opcional)" aria-label="Autor" />
+        <div class="note-actions">
+          <button type="button" class="ghost-btn" id="philoCancel" hidden>Cancelar</button>
+          <button type="submit" class="primary-btn" id="philoSave">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Filtro da lista -->
+      <div class="segmented filter" id="philoFilter">
+        <button class="seg active" data-filter="all">Todas</button>
+        <button class="seg" data-filter="frase">Frases</button>
+        <button class="seg" data-filter="principio">Princípios</button>
+      </div>
+
+      <div id="philoList"></div>
+    </section>
+
+    <!-- ===================== MINDSET ===================== -->
+    <section class="screen" data-screen="mindset" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Mindset</h2>
+      </div>
+
+      <!-- Resumo + um lembrete sorteado entre os favoritos -->
+      <article class="card glass mindset-hero">
+        <p class="card-eyebrow">Mentalidade de crescimento</p>
+        <div class="mini-stats">
+          <div><strong id="msCountLearn">0</strong><span>aprendizados</span></div>
+          <div><strong id="msCountThought">0</strong><span>pensamentos</span></div>
+          <div><strong id="msCountFav">0</strong><span>favoritos</span></div>
+        </div>
+        <p class="ms-reminder" id="msReminder"></p>
+      </article>
+
+      <form class="card glass note-form" id="msForm" autocomplete="off">
+        <div class="segmented" role="radiogroup" aria-label="Tipo">
+          <label><input type="radio" name="msType" value="aprendizado" checked /><span>Aprendizado</span></label>
+          <label><input type="radio" name="msType" value="pensamento" /><span>Pensamento positivo</span></label>
+        </div>
+        <textarea id="msText" rows="3" maxlength="1500" placeholder="O que você aprendeu ou quer lembrar?" aria-label="Texto"></textarea>
+        <input id="msRef" class="line-input" maxlength="60" placeholder="Capítulo ou página (opcional)" aria-label="Capítulo ou página" />
+        <div class="note-actions">
+          <button type="button" class="ghost-btn" id="msCancel" hidden>Cancelar</button>
+          <button type="submit" class="primary-btn" id="msSave">Salvar</button>
+        </div>
+      </form>
+
+      <div class="segmented filter" id="msFilter">
+        <button class="seg active" data-filter="all">Todos</button>
+        <button class="seg" data-filter="aprendizado">Aprend.</button>
+        <button class="seg" data-filter="pensamento">Positivos</button>
+        <button class="seg" data-filter="fav" aria-label="Favoritos">★</button>
+      </div>
+
+      <div id="msList"></div>
+    </section>
+
+    <!-- ===================== META DE LEITURA ===================== -->
+    <section class="screen" data-screen="reading" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Meta de leitura</h2>
+      </div>
+
+      <!-- Anel de progresso -->
+      <article class="card glass ring-card">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+            <defs>
+              <linearGradient id="gRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#8b5cf6"/>
+              </linearGradient>
+            </defs>
+            <circle cx="60" cy="60" r="50" class="ring-bg"/>
+            <!-- pathLength="100" deixa a conta fácil: 100 = anel completo -->
+            <circle cx="60" cy="60" r="50" class="ring-fg" id="ringFg" pathLength="100"/>
+          </svg>
+          <div class="ring-center">
+            <strong id="ringCount">0</strong>
+            <span id="ringGoal">de 12 livros</span>
+          </div>
+        </div>
+        <p class="ring-pace" id="ringPace">—</p>
+        <!-- Definir meta -->
+        <form class="goal-row" id="goalForm">
+          <label for="goalInput">Meta de <span id="goalYear">2026</span>:</label>
+          <input type="number" id="goalInput" min="1" max="365" inputmode="numeric" />
+          <span>livros</span>
+          <button class="ghost-btn small-btn" type="submit">Salvar</button>
+        </form>
+      </article>
+
+      <!-- Cadastro de livro -->
+      <form class="card glass note-form" id="bookForm" autocomplete="off">
+        <div class="segmented" role="radiogroup" aria-label="Situação">
+          <label><input type="radio" name="bookStatus" value="lido" checked /><span>Já li</span></label>
+          <label><input type="radio" name="bookStatus" value="lendo" /><span>Lendo agora</span></label>
+        </div>
+        <input id="bookTitle" class="line-input first" maxlength="100" placeholder="Título do livro" aria-label="Título" />
+        <input id="bookAuthor" class="line-input" maxlength="60" placeholder="Autor (opcional)" aria-label="Autor" />
+        <!-- Estrelas (só para livros lidos) -->
+        <div class="stars-input" id="bookStars" aria-label="Nota do livro">
+          <button type="button" data-v="1">★</button><button type="button" data-v="2">★</button><button type="button" data-v="3">★</button><button type="button" data-v="4">★</button><button type="button" data-v="5">★</button>
+        </div>
+        <div class="note-actions">
+          <button type="button" class="ghost-btn" id="bookCancel" hidden>Cancelar</button>
+          <button type="submit" class="primary-btn" id="bookSave">Adicionar</button>
+        </div>
+      </form>
+
+      <p class="section-label" id="readingLabel">Lendo agora</p>
+      <div id="readingList"></div>
+      <p class="section-label" id="readLabel">Lidos este ano</p>
+      <div id="readList"></div>
+    </section>
+
+    <!-- ===================== ESTUDOS (matéria do dia + quiz) ===================== -->
+    <section class="screen" data-screen="studies" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Estudos</h2>
+      </div>
+
+      <!-- Lista de matérias para o autocompletar dos campos -->
+      <datalist id="subjectList"></datalist>
+
+      <!-- Abas internas da tela -->
+      <div class="segmented" id="studyTabs">
+        <button class="seg active" data-tab="plan">Plano</button>
+        <button class="seg" data-tab="exams">Provas</button>
+        <button class="seg" data-tab="quiz">Quiz</button>
+      </div>
+
+      <!-- ABA 1: plano da semana -->
+      <div class="study-pane" data-pane="plan">
+        <article class="card glass">
+          <p class="card-eyebrow">Plano de estudos da semana</p>
+          <p class="muted small">Escreva a matéria de cada dia. Salva sozinho.</p>
+          <div id="planList"></div>
+        </article>
+      </div>
+
+      <!-- ABA 2: provas e trabalhos -->
+      <div class="study-pane" data-pane="exams" hidden>
+        <form class="card glass note-form" id="examForm" autocomplete="off">
+          <p class="card-eyebrow">Nova prova ou trabalho</p>
+          <div class="segmented tiny" id="examType">
+            <button type="button" class="seg active" data-type="prova">Prova</button>
+            <button type="button" class="seg" data-type="trabalho">Trabalho</button>
+          </div>
+          <input id="examTitle" class="line-input first" maxlength="60" placeholder="O quê? (ex.: P1, seminário)" aria-label="Título" />
+          <input id="examSubject" class="line-input" list="subjectList" maxlength="40" placeholder="Matéria" aria-label="Matéria" />
+          <div class="exam-date-row">
+            <span class="muted small">Data</span>
+            <input type="date" id="examDate" class="date-input" aria-label="Data" />
+          </div>
+          <div class="note-actions">
+            <button type="submit" class="primary-btn">Adicionar</button>
+          </div>
+        </form>
+        <div id="examList"></div>
+      </div>
+
+      <!-- ABA 3: perguntas + quiz -->
+      <div class="study-pane" data-pane="quiz" hidden>
+        <!-- Área do quiz (aparece quando o quiz começa) -->
+        <article class="card glass quiz-box" id="quizBox" hidden></article>
+
+        <article class="card glass" id="quizStart">
+          <p class="card-eyebrow">Quiz para fixar o conteúdo</p>
+          <p class="muted small">Escolha a matéria. As perguntas que o senhor mais erra aparecem primeiro.</p>
+          <div class="chips" id="quizSubjects"></div>
+          <button class="primary-btn wide-btn" id="quizGo">Começar quiz</button>
+        </article>
+
+        <form class="card glass note-form" id="questionForm" autocomplete="off">
+          <p class="card-eyebrow">Nova pergunta</p>
+          <input id="qSubject" class="line-input first" list="subjectList" maxlength="40" placeholder="Matéria" aria-label="Matéria" />
+          <textarea id="qText" rows="2" maxlength="300" placeholder="Pergunta (ex.: O que é uma derivada?)" aria-label="Pergunta"></textarea>
+          <textarea id="qAnswer" rows="2" maxlength="500" placeholder="Resposta" aria-label="Resposta"></textarea>
+          <div class="note-actions">
+            <button type="submit" class="primary-btn">Salvar pergunta</button>
+          </div>
+        </form>
+
+        <p class="section-label" id="qLabel">Minhas perguntas</p>
+        <div id="questionList"></div>
+      </div>
+    </section>
+
+    <!-- ===================== RELATÓRIO MENSAL ===================== -->
+    <section class="screen" data-screen="report" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Relatório</h2>
+      </div>
+
+      <article class="card glass">
+        <div class="month-nav">
+          <button class="mini-btn" id="repPrev" aria-label="Mês anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <strong id="repMonth">—</strong>
+          <button class="mini-btn" id="repNext" aria-label="Próximo mês"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <p class="rep-headline" id="repHeadline"></p>
+        <div class="rep-grid" id="repGrid"></div>
+        <p class="muted small center rep-legend">Setas comparam com o mês anterior</p>
+      </article>
+
+      <article class="card glass">
+        <p class="card-eyebrow">XP por dia</p>
+        <div class="chart" id="repXpChart"></div>
+      </article>
+
+      <article class="card glass">
+        <p class="card-eyebrow">Hábitos no mês</p>
+        <div class="cat-bars rep-bars" id="repHabits"></div>
+      </article>
+
+      <article class="card glass">
+        <p class="card-eyebrow">Gastos por categoria</p>
+        <div class="cat-bars rep-bars" id="repSpend"></div>
+      </article>
+
+      <article class="card glass">
+        <p class="card-eyebrow">Humor do mês</p>
+        <div class="rep-mood" id="repMood"></div>
+      </article>
+
+      <article class="card glass">
+        <p class="card-eyebrow">Destaques</p>
+        <ul class="rep-highlights" id="repHighlights"></ul>
+        <div class="btn-row">
+          <button class="primary-btn" id="repSpeak">🔊 Ouvir</button>
+          <button class="ghost-btn" id="repShare">Compartilhar</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- ===================== PROJETOS DE PROGRAMAÇÃO ===================== -->
+    <section class="screen" data-screen="dev" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Projetos dev</h2>
+      </div>
+
+      <article class="card glass">
+        <div class="mini-stats">
+          <div><strong id="devActive">0</strong><span>em andamento</span></div>
+          <div><strong id="devAvg">0%</strong><span>progresso médio</span></div>
+          <div><strong id="devWeek">0</strong><span>etapas na semana</span></div>
+        </div>
+      </article>
+
+      <form class="add-row card glass" id="devForm" autocomplete="off">
+        <input id="devEmoji" class="emoji-input" maxlength="2" value="💻" aria-label="Emoji do projeto" />
+        <input id="devName" maxlength="40" placeholder="Novo projeto (ex.: Site portfólio)" aria-label="Nome do projeto" />
+        <button class="add-btn" aria-label="Adicionar projeto">+</button>
+      </form>
+
+      <div class="segmented filter" id="devFilter">
+        <button class="seg active" data-f="ativo">Ativos</button>
+        <button class="seg" data-f="pausado">Pausados</button>
+        <button class="seg" data-f="concluido">Concluídos</button>
+      </div>
+      <div id="devList"></div>
+    </section>
+
+    <!-- ===================== TREINOS ===================== -->
+    <section class="screen" data-screen="workout" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Treinos</h2>
+      </div>
+
+      <article class="card glass">
+        <div class="mini-stats">
+          <div><strong id="woWeek">0</strong><span>treinos na semana</span></div>
+          <div><strong id="woMonth">0</strong><span>no mês</span></div>
+          <div><strong id="woMinutes">0</strong><span>min na semana</span></div>
+        </div>
+        <div class="wo-week" id="woWeekDots"></div>
+      </article>
+
+      <datalist id="woNames"></datalist>
+      <datalist id="woExercises"></datalist>
+
+      <!-- Novo treino -->
+      <form class="card glass note-form" id="woForm" autocomplete="off">
+        <div class="perf-form-head">
+          <p class="card-eyebrow">Novo treino</p>
+          <input type="date" id="woDate" class="date-input" aria-label="Data do treino" />
+        </div>
+        <input id="woName" class="line-input first" list="woNames" maxlength="40" placeholder="Nome (ex.: Treino A - Peito)" aria-label="Nome do treino" />
+        <button type="button" class="link-btn wo-copy" id="woCopy" hidden></button>
+        <div class="wo-head-row"><span>Exercício</span><span>Séries</span><span>Reps</span><span>kg</span><span></span></div>
+        <div id="woRows"></div>
+        <button type="button" class="ghost-btn small-btn" id="woAddRow">+ Exercício</button>
+        <div class="toggle-row wo-min">
+          <span>Duração (min)</span>
+          <input type="number" id="woMin" class="num-input" min="0" max="600" inputmode="numeric" placeholder="60" aria-label="Duração em minutos" />
+        </div>
+        <textarea id="woNote" class="boxed" rows="2" maxlength="300" placeholder="Como foi? (opcional)" aria-label="Observação"></textarea>
+        <div class="note-actions">
+          <button type="submit" class="primary-btn">Salvar treino</button>
+        </div>
+      </form>
+
+      <!-- Evolução de carga -->
+      <article class="card glass">
+        <div class="chart-head">
+          <p class="card-eyebrow">Evolução de carga</p>
+          <select id="woExSelect" class="wo-select" aria-label="Exercício"></select>
+        </div>
+        <div id="woChart" class="chart"></div>
+        <p class="muted small center" id="woPR"></p>
+      </article>
+
+      <p class="section-label">Histórico</p>
+      <div id="woList"></div>
+    </section>
+
+    <!-- ===================== HÁBITOS ===================== -->
+    <section class="screen" data-screen="habits" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Hábitos</h2>
+      </div>
+
+      <form class="add-row card glass" id="habitForm" autocomplete="off">
+        <input id="habitEmoji" class="emoji-input" maxlength="2" value="⭐" aria-label="Emoji do hábito" />
+        <input id="habitInput" maxlength="40" placeholder="Novo hábito (ex.: Ler 10 páginas)" aria-label="Nome do hábito" />
+        <button class="add-btn" aria-label="Adicionar hábito">+</button>
+      </form>
+
+      <p class="muted small hint-center">Toque nos círculos para marcar os últimos 7 dias.</p>
+      <div id="habitList"></div>
+    </section>
+
+    <!-- ===================== CONQUISTAS ===================== -->
+    <section class="screen" data-screen="achievements" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Conquistas</h2>
+      </div>
+
+      <article class="card glass xp-hero">
+        <svg viewBox="0 0 120 120" class="owl" aria-hidden="true">
+            <!-- Mascote original: Coruja neon (desenhada só com formas simples) -->
+            <defs>
+              <radialGradient id="owlBody" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#3da9ff"/><stop offset="1" stop-color="#1e3a8a"/></radialGradient>
+            </defs>
+            <path d="M30 40 L38 18 L50 34 Q60 30 70 34 L82 18 L90 40 Q100 60 92 84 Q80 108 60 108 Q40 108 28 84 Q20 60 30 40z" fill="url(#owlBody)" stroke="#7cc8ff" stroke-width="2.5"/>
+            <circle cx="46" cy="56" r="14" fill="#0b1230" stroke="#7cc8ff" stroke-width="2.5"/>
+            <circle cx="74" cy="56" r="14" fill="#0b1230" stroke="#7cc8ff" stroke-width="2.5"/>
+            <circle cx="46" cy="56" r="6" fill="#22d3ee" class="owl-eye"/>
+            <circle cx="74" cy="56" r="6" fill="#22d3ee" class="owl-eye"/>
+            <path d="M56 68 L60 76 L64 68z" fill="#fbbf24"/>
+            <path d="M44 88 Q60 98 76 88" fill="none" stroke="#7cc8ff" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        <div>
+          <p class="card-eyebrow">Seu progresso</p>
+          <strong class="xp-total" id="xpTotal">0 XP</strong>
+          <p class="muted small" id="xpNext">—</p>
+        </div>
+      </article>
+
+      <article class="card glass">
+        <p class="card-eyebrow">Como ganhar XP</p>
+        <ul class="xp-rules">
+          <li><span>Tarefa concluída</span><b>+10</b></li>
+          <li><span>Hábito cumprido</span><b>+5</b></li>
+          <li><span>Pomodoro completo</span><b>+20</b></li>
+          <li><span>Registrar o dia no Desempenho</span><b>+15</b></li>
+          <li><span>Livro lido</span><b>+50</b></li>
+        </ul>
+      </article>
+
+      <p class="section-label" id="badgeCount">Medalhas</p>
+      <div class="badge-grid" id="badgeGrid"></div>
+    </section>
+
+    <!-- Tela de comemoração ao subir de nível -->
+    <div class="levelup" id="levelUp" hidden>
+      <div class="levelup-box glass">
+        <svg viewBox="0 0 120 120" class="owl" aria-hidden="true">
+            <!-- Mascote original: Coruja neon (desenhada só com formas simples) -->
+            <defs>
+              <radialGradient id="owlBody" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#3da9ff"/><stop offset="1" stop-color="#1e3a8a"/></radialGradient>
+            </defs>
+            <path d="M30 40 L38 18 L50 34 Q60 30 70 34 L82 18 L90 40 Q100 60 92 84 Q80 108 60 108 Q40 108 28 84 Q20 60 30 40z" fill="url(#owlBody)" stroke="#7cc8ff" stroke-width="2.5"/>
+            <circle cx="46" cy="56" r="14" fill="#0b1230" stroke="#7cc8ff" stroke-width="2.5"/>
+            <circle cx="74" cy="56" r="14" fill="#0b1230" stroke="#7cc8ff" stroke-width="2.5"/>
+            <circle cx="46" cy="56" r="6" fill="#22d3ee" class="owl-eye"/>
+            <circle cx="74" cy="56" r="6" fill="#22d3ee" class="owl-eye"/>
+            <path d="M56 68 L60 76 L64 68z" fill="#fbbf24"/>
+            <path d="M44 88 Q60 98 76 88" fill="none" stroke="#7cc8ff" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        <p class="card-eyebrow">Subiu de nível!</p>
+        <strong class="levelup-num" id="levelUpNum">2</strong>
+        <p id="levelUpMsg">Continue assim!</p>
+        <button class="primary-btn" id="levelUpOk">Bora!</button>
+      </div>
+    </div>
+
+    <!-- ===================== FINANÇAS ===================== -->
+    <section class="screen" data-screen="finance" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Finanças</h2>
+      </div>
+
+      <!-- Resumo do mês -->
+      <article class="card glass">
+        <div class="month-nav">
+          <button class="mini-btn" id="finPrev" aria-label="Mês anterior"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <strong id="finMonth">—</strong>
+          <button class="mini-btn" id="finNext" aria-label="Próximo mês"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <p class="fin-total" id="finTotal">R$ 0,00</p>
+        <p class="muted small center" id="finCompare">gastos no mês</p>
+        <div id="finCats" class="cat-bars"></div>
+      </article>
+
+      <!-- Novo gasto -->
+      <form class="card glass note-form" id="expForm" autocomplete="off">
+        <p class="card-eyebrow">Novo gasto</p>
+        <div class="exp-row">
+          <span class="currency">R$</span>
+          <input id="expAmount" class="amount-input" inputmode="decimal" placeholder="0,00" aria-label="Valor" />
+          <input type="date" id="expDate" class="date-input" aria-label="Data" />
+        </div>
+        <input id="expDesc" class="line-input" maxlength="60" placeholder="Descrição (ex.: almoço)" aria-label="Descrição" />
+        <div class="chips" id="expCats"></div>
+        <div class="note-actions">
+          <button type="submit" class="primary-btn">Adicionar gasto</button>
+        </div>
+      </form>
+
+      <!-- Metas de economia -->
+      <p class="section-label">Metas de economia</p>
+      <div id="goalList"></div>
+      <form class="add-row card glass" id="savGoalForm" autocomplete="off">
+        <input id="savGoalEmoji" class="emoji-input" maxlength="2" value="🎯" aria-label="Emoji" />
+        <input id="savGoalName" maxlength="30" placeholder="Nova meta" aria-label="Nome da meta" />
+        <input id="savGoalTarget" class="target-input" inputmode="decimal" placeholder="R$" aria-label="Valor da meta" />
+        <button class="add-btn" aria-label="Adicionar meta">+</button>
+      </form>
+
+      <!-- Lista de gastos do mês -->
+      <p class="section-label" id="expLabel">Gastos do mês</p>
+      <div id="expList"></div>
+    </section>
+
+    <!-- ===================== LEMBRETES ===================== -->
+    <section class="screen" data-screen="reminders" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Lembretes</h2>
+      </div>
+
+      <!-- Situação da permissão de notificações -->
+      <article class="card glass perm-card" id="permCard">
+        <p class="card-eyebrow">Notificações</p>
+        <p id="permText" class="muted small">—</p>
+        <div class="btn-row">
+          <button class="primary-btn" id="permBtn">Permitir notificações</button>
+          <button class="ghost-btn" id="testNotif">Testar agora</button>
+        </div>
+      </article>
+
+      <!-- Aviso do fechamento do dia -->
+      <article class="card glass">
+        <p class="card-eyebrow">Fechamento do dia</p>
+        <div class="toggle-row">
+          <span>Avisar para ver o fechamento</span>
+          <button class="switch" id="setDayEnd" role="switch" aria-label="Avisar fechamento do dia"><span></span></button>
+        </div>
+        <div class="toggle-row">
+          <span>Horário do aviso</span>
+          <input type="time" id="setDayEndTime" class="date-input" aria-label="Horário do fechamento" />
+        </div>
+      </article>
+
+      <!-- Novo lembrete -->
+      <form class="card glass note-form" id="remForm" autocomplete="off">
+        <div class="rem-top">
+          <input type="time" id="remTime" class="date-input big-time" value="09:00" aria-label="Horário" required />
+          <input id="remText" class="line-input first" maxlength="80" placeholder="Texto do lembrete (opcional)" aria-label="Texto do lembrete" />
+        </div>
+        <p class="muted small hint">Sem texto, a assistente manda uma frase motivacional.</p>
+        <div class="day-picker" id="remDays" aria-label="Dias da semana">
+          <button type="button" class="on" data-d="1">S</button><button type="button" class="on" data-d="2">T</button><button type="button" class="on" data-d="3">Q</button><button type="button" class="on" data-d="4">Q</button><button type="button" class="on" data-d="5">S</button><button type="button" class="on" data-d="6">S</button><button type="button" class="on" data-d="0">D</button>
+        </div>
+        <div class="note-actions">
+          <button type="button" class="ghost-btn" id="remCancel" hidden>Cancelar</button>
+          <button type="submit" class="primary-btn" id="remSave">Adicionar</button>
+        </div>
+      </form>
+
+      <div id="remList"></div>
+    </section>
+
+    <!-- ===================== CONFIGURAÇÕES ===================== -->
+    <section class="screen" data-screen="settings" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Configurações</h2>
+      </div>
+
+      <!-- Personalização -->
+      <form class="card glass settings-form" id="settingsForm" autocomplete="off">
+        <p class="card-eyebrow">Personalização</p>
+        <label class="field">
+          <span>Como a assistente te chama</span>
+          <input id="setUserTitle" maxlength="30" placeholder="senhor" />
+        </label>
+        <label class="field">
+          <span>Nome da assistente</span>
+          <input id="setAssistant" maxlength="20" placeholder="Atena" />
+        </label>
+        <p class="preview-line" id="setPreview">—</p>
+        <div class="field-pair">
+          <label class="field">
+            <span>Pomodoro: foco (min)</span>
+            <input type="number" id="setFocusMin" min="1" max="120" inputmode="numeric" />
+          </label>
+          <label class="field">
+            <span>Pausa (min)</span>
+            <input type="number" id="setBreakMin" min="1" max="60" inputmode="numeric" />
+          </label>
+        </div>
+        <div class="note-actions">
+          <button type="submit" class="primary-btn" id="setSave">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Aparência -->
+      <article class="card glass">
+        <p class="card-eyebrow">Aparência</p>
+        <div class="segmented" id="setTheme">
+          <button class="seg" data-theme="dark">Escuro</button>
+          <button class="seg" data-theme="light">Claro</button>
+        </div>
+      </article>
+
+      <!-- Sincronização na nuvem (Firebase) -->
+      <article class="card glass sync-card" id="syncCard">
+        <p class="card-eyebrow">Sincronização na nuvem</p>
+        <p class="sync-status" id="syncStatus">Desligada</p>
+
+        <!-- 1) Sem configuração: colar o firebaseConfig -->
+        <div id="syncSetup">
+          <p class="muted small">Cole aqui o bloco <b>firebaseConfig</b> do seu projeto Firebase (é gratuito).</p>
+          <textarea id="syncConfig" class="boxed mono" rows="6" spellcheck="false"
+            placeholder="const firebaseConfig = {&#10;  apiKey: &quot;...&quot;,&#10;  authDomain: &quot;...&quot;,&#10;  projectId: &quot;...&quot;,&#10;  appId: &quot;...&quot;&#10;};"></textarea>
+          <div class="note-actions">
+            <button class="primary-btn" id="syncSaveConfig">Salvar configuração</button>
+          </div>
+          <details class="sync-help">
+            <summary>Como criar o Firebase (passo a passo)</summary>
+            <ol>
+              <li>Abra <b>console.firebase.google.com</b> e entre com sua conta Google.</li>
+              <li><b>Adicionar projeto</b> → nome "atena" → pode desligar o Analytics → <b>Criar</b>.</li>
+              <li>Menu <b>Authentication</b> → Começar → <b>Google</b> → Ativar → escolha seu e-mail → Salvar.</li>
+              <li>Menu <b>Firestore Database</b> → Criar banco → local <b>southamerica-east1 (São Paulo)</b> → modo produção.</li>
+              <li>Na aba <b>Regras</b> do Firestore, cole as regras do arquivo FIREBASE.md e clique em <b>Publicar</b>.</li>
+              <li>Engrenagem → <b>Configurações do projeto</b> → Seus apps → ícone <b>&lt;/&gt;</b> (Web) → apelido "atena" → Registrar.</li>
+              <li>Copie o bloco <b>firebaseConfig</b> que aparecer e cole no campo acima.</li>
+            </ol>
+          </details>
+        </div>
+
+        <!-- 2) Configurado: entrar / sair -->
+        <div id="syncAccount" hidden>
+          <div class="btn-row">
+            <button class="primary-btn" id="syncLogin">Entrar com Google</button>
+            <button class="primary-btn" id="syncNow" hidden>Sincronizar</button>
+            <button class="ghost-btn" id="syncLogout" hidden>Sair</button>
+          </div>
+          <button class="link-btn sync-change" id="syncChangeConfig">Trocar configuração do Firebase</button>
+        </div>
+      </article>
+
+      <!-- Mega Brain -->
+      <article class="card glass">
+        <p class="card-eyebrow">Mega Brain</p>
+        <div class="toggle-row">
+          <span>Abertura com o cérebro</span>
+          <button class="switch" id="setSplash" role="switch" aria-label="Abertura com o cérebro"><span></span></button>
+        </div>
+        <div class="toggle-row">
+          <span>Falar a saudação na abertura</span>
+          <button class="switch" id="setSplashVoice" role="switch" aria-label="Falar a saudação"><span></span></button>
+        </div>
+        <button class="ghost-btn small-btn" id="previewSplash">Ver a abertura agora</button>
+      </article>
+
+      <!-- Backup -->
+      <article class="card glass">
+        <p class="card-eyebrow">Backup dos dados</p>
+        <p class="muted small">Seus dados ficam salvos neste aparelho (e na nuvem, se a sincronização estiver ligada). Faça backup de vez em quando e guarde o arquivo no Drive ou no computador.</p>
+        <div class="btn-row">
+          <button class="primary-btn" id="exportBtn">Exportar backup</button>
+          <!-- O input de arquivo fica escondido; o botão abaixo "clica" nele -->
+          <input type="file" id="importFile" accept="application/json,.json" hidden />
+          <button class="ghost-btn" id="importBtn">Importar backup</button>
+        </div>
+        <p class="muted small" id="storageInfo"></p>
+      </article>
+
+      <!-- Bloqueio do app -->
+      <article class="card glass">
+        <p class="card-eyebrow">Bloqueio do app</p>
+        <div class="toggle-row">
+          <span>Pedir PIN ao abrir</span>
+          <button class="switch" id="setLock" role="switch" aria-label="Pedir PIN ao abrir"><span></span></button>
+        </div>
+        <div id="lockOptions" hidden>
+          <div class="toggle-row" id="bioRow" hidden>
+            <span>Desbloquear com digital ou rosto</span>
+            <button class="switch" id="setBio" role="switch" aria-label="Usar digital ou rosto"><span></span></button>
+          </div>
+          <p class="muted small lock-after-label">Bloquear de novo depois de sair do app:</p>
+          <div class="segmented tiny" id="setLockAfter">
+            <button class="seg" data-min="0">Na hora</button>
+            <button class="seg" data-min="1">1 min</button>
+            <button class="seg" data-min="5">5 min</button>
+          </div>
+          <button class="ghost-btn small-btn" id="changePin">Trocar PIN</button>
+        </div>
+        <p class="muted small lock-note">O PIN fica só neste aparelho e é guardado embaralhado (hash). Ele protege contra curiosos, mas não substitui a senha de tela do celular.</p>
+      </article>
+
+      <!-- Zona de perigo -->
+      <article class="card glass danger">
+        <p class="card-eyebrow">Zona de perigo</p>
+        <p class="muted small">Apaga tudo deste aparelho. Exporte um backup antes.</p>
+        <button class="danger-btn" id="resetBtn">Apagar todos os dados</button>
+      </article>
+
+      <p class="version">Atena · versão 0.8</p>
+    </section>
+
+    <!-- Aviso rápido que aparece embaixo da tela (ex.: "Backup exportado") -->
+    <div class="toast glass" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- ===================== ANOTAÇÕES ===================== -->
+    <!-- data-parent="more" = a aba "Mais" fica acesa enquanto esta tela está aberta -->
+    <section class="screen" data-screen="notes" data-parent="more">
+      <div class="screen-head">
+        <button class="icon-btn glass" data-go="more" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 class="screen-title">Anotações</h2>
+      </div>
+
+      <!-- Formulário: serve para criar E para editar -->
+      <form class="card glass note-form" id="noteForm" autocomplete="off">
+        <textarea id="noteInput" rows="3" maxlength="2000" placeholder="Escreva uma anotação rápida..." aria-label="Anotação"></textarea>
+        <div class="note-actions">
+          <button type="button" class="ghost-btn" id="noteCancel" hidden>Cancelar</button>
+          <button type="submit" class="primary-btn" id="noteSave">Salvar</button>
+        </div>
+      </form>
+
+      <!-- Busca -->
+      <div class="add-row card glass search-row">
+        <svg viewBox="0 0 24 24" width="18" height="18" class="search-icon"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="noteSearch" type="search" placeholder="Buscar nas anotações..." aria-label="Buscar" />
+      </div>
+
+      <div id="noteList"></div>
+    </section>
+  </main>
+
+  <!-- Barra de navegação inferior flutuante de vidro -->
+  <nav class="tabbar glass" aria-label="Navegação principal">
+    <button class="tab active" data-go="home" aria-label="Início">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+      <span>Início</span>
+    </button>
+    <button class="tab" data-go="tasks" aria-label="Tarefas">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+      <span>Tarefas</span>
+    </button>
+    <button class="tab" data-go="focus" aria-label="Foco">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>
+      <span>Foco</span>
+    </button>
+    <button class="tab" data-go="stats" aria-label="Desempenho">
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span>Evolução</span>
+    </button>
+    <button class="tab" data-go="more" aria-label="Mais">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      <span>Mais</span>
+    </button>
+  </nav>
+
+  <!-- O JavaScript fica no fim para a página carregar primeiro -->
+  <script src="app.js"></script>
+</body>
+</html>
